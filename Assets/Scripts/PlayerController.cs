@@ -7,8 +7,14 @@ public class PlayerController : MonoBehaviour
     public float moveSpeed = 5f;
     public float rotationSpeed = 10f;
 
+    [Header("Jump")]
+    public float jumpForce = 6f;
+    public float gravity = -20f;
+    private float verticalVelocity = 0f;
+    private bool isGrounded = true;
+
     [Header("Interaction")]
-    public float interactionRadius = 2f;
+    public float interactionRadius = 2.5f;
     public Transform holdPoint;
     public LayerMask bookLayer;
     public LayerMask shelfLayer;
@@ -17,9 +23,15 @@ public class PlayerController : MonoBehaviour
     public Transform cameraTransform;
 
     private CharacterController controller;
+
+    // Held items
     private BookItem heldBook = null;
+    private Artwork heldArtwork = null;
+
+    // Hovered items
     private BookItem hoveredBook = null;
     private BookshelfSlot hoveredSlot = null;
+    private Artwork hoveredArtwork = null;
 
     void Start()
     {
@@ -30,7 +42,7 @@ public class PlayerController : MonoBehaviour
         {
             GameObject hp = new GameObject("HoldPoint");
             hp.transform.SetParent(transform);
-            hp.transform.localPosition = new Vector3(0, 0.8f, 0.6f);
+            hp.transform.localPosition = new Vector3(0, 0.8f, 0.8f);
             holdPoint = hp.transform;
         }
     }
@@ -48,6 +60,8 @@ public class PlayerController : MonoBehaviour
         float v = Input.GetAxis("Vertical");
 
         Vector3 input = new Vector3(h, 0, v);
+        Vector3 moveDir = Vector3.zero;
+
         if (input.magnitude > 0.1f)
         {
             Vector3 camForward = cameraTransform.forward;
@@ -57,10 +71,8 @@ public class PlayerController : MonoBehaviour
             camForward.Normalize();
             camRight.Normalize();
 
-            Vector3 moveDir = camForward * v + camRight * h;
+            moveDir = camForward * v + camRight * h;
             moveDir.Normalize();
-
-            controller.Move(moveDir * moveSpeed * Time.deltaTime);
 
             if (moveDir.magnitude > 0.1f)
             {
@@ -68,16 +80,31 @@ public class PlayerController : MonoBehaviour
                 transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, rotationSpeed * Time.deltaTime);
             }
         }
+
+        // Jump & gravity
+        isGrounded = controller.isGrounded;
+        if (isGrounded && verticalVelocity < 0)
+            verticalVelocity = -0.5f;
+
+        if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
+            verticalVelocity = jumpForce;
+
+        verticalVelocity += gravity * Time.deltaTime;
+
+        Vector3 motion = moveDir * moveSpeed + Vector3.up * verticalVelocity;
+        controller.Move(motion * Time.deltaTime);
     }
 
     void DetectHoveredObjects()
     {
         hoveredBook = null;
         hoveredSlot = null;
+        hoveredArtwork = null;
 
         Collider[] hits = Physics.OverlapSphere(transform.position, interactionRadius);
         float nearestBookDist = float.MaxValue;
         float nearestSlotDist = float.MaxValue;
+        float nearestArtDist = float.MaxValue;
 
         foreach (var hit in hits)
         {
@@ -102,40 +129,58 @@ public class PlayerController : MonoBehaviour
                     hoveredSlot = slot;
                 }
             }
+
+            Artwork art = hit.GetComponent<Artwork>();
+            if (art != null && !art.isHeld)
+            {
+                float d = Vector3.Distance(transform.position, art.transform.position);
+                if (d < nearestArtDist)
+                {
+                    nearestArtDist = d;
+                    hoveredArtwork = art;
+                }
+            }
         }
     }
 
     void HandleInput()
     {
-        // E: Pick up / Place
         if (Input.GetKeyDown(KeyCode.E))
         {
-            if (heldBook == null)
+            if (heldBook != null)
             {
-                TryPickup();
+                TryPlaceOrDropBook();
             }
-            else
+            else if (heldArtwork != null)
             {
-                TryPlaceOrDrop();
+                TryPlaceOrDropArtwork();
+            }
+            else if (hoveredBook != null)
+            {
+                PickupBook(hoveredBook);
+            }
+            else if (hoveredArtwork != null)
+            {
+                PickupArtwork(hoveredArtwork);
             }
         }
 
-        // F: Read / Open PDF
-        if (Input.GetKeyDown(KeyCode.F) && heldBook != null)
+        if (Input.GetKeyDown(KeyCode.F))
         {
-            TryOpenPdf();
+            if (heldBook != null)
+            {
+                TryOpenPdf();
+            }
+            else if (heldArtwork != null)
+            {
+                TryOpenWiki();
+            }
         }
     }
 
-    void TryPickup()
-    {
-        if (hoveredBook != null)
-        {
-            Pickup(hoveredBook);
-        }
-    }
+    // ===================== BOOKS =====================
 
-    void Pickup(BookItem book)
+    void PickupBook(BookItem book)
     {
         heldBook = book;
         book.isHeld = true;
@@ -151,22 +196,22 @@ public class PlayerController : MonoBehaviour
         Collider col = book.GetComponent<Collider>();
         if (col != null) col.enabled = false;
 
-        BookUI.Instance?.SetHeldBook(book);
+        BookUI.Instance?.SetHeldItem(book.bookTitle, "book");
     }
 
-    void TryPlaceOrDrop()
+    void TryPlaceOrDropBook()
     {
         if (hoveredSlot != null)
         {
-            PlaceInSlot(hoveredSlot);
+            PlaceBookInSlot(hoveredSlot);
         }
         else
         {
-            Drop();
+            DropBook();
         }
     }
 
-    void PlaceInSlot(BookshelfSlot slot)
+    void PlaceBookInSlot(BookshelfSlot slot)
     {
         if (heldBook == null) return;
 
@@ -186,12 +231,12 @@ public class PlayerController : MonoBehaviour
         Collider col = heldBook.GetComponent<Collider>();
         if (col != null) col.enabled = true;
 
-        BookUI.Instance?.SetHeldBook(null);
+        BookUI.Instance?.ClearHeldItem();
         BookUI.Instance?.UpdateProgress();
         heldBook = null;
     }
 
-    void Drop()
+    void DropBook()
     {
         if (heldBook == null) return;
 
@@ -210,7 +255,7 @@ public class PlayerController : MonoBehaviour
         Collider col = heldBook.GetComponent<Collider>();
         if (col != null) col.enabled = true;
 
-        BookUI.Instance?.SetHeldBook(null);
+        BookUI.Instance?.ClearHeldItem();
         heldBook = null;
     }
 
@@ -224,15 +269,77 @@ public class PlayerController : MonoBehaviour
         }
         else if (string.IsNullOrEmpty(path))
         {
-            BookUI.Instance?.ShowPdfMockMessage(heldBook.bookTitle, "No PDF assigned. Place a .pdf file in Assets/StreamingAssets/PDFs/ and rebuild the scene.");
+            BookUI.Instance?.ShowMockMessage($"No PDF assigned for:\n{heldBook.bookTitle}", "Place a .pdf in Assets/StreamingAssets/PDFs/");
         }
         else
         {
-            BookUI.Instance?.ShowPdfMockMessage(heldBook.bookTitle, path);
+            BookUI.Instance?.ShowMockMessage(heldBook.bookTitle, path);
         }
     }
+
+    // ===================== ARTWORKS =====================
+
+    void PickupArtwork(Artwork art)
+    {
+        heldArtwork = art;
+        art.isHeld = true;
+        art.transform.SetParent(holdPoint);
+        art.transform.localPosition = Vector3.zero;
+        art.transform.localRotation = Quaternion.identity;
+        art.transform.localScale = art.originalScale * 0.6f; // Slightly smaller when holding
+
+        Collider col = art.GetComponent<Collider>();
+        if (col != null) col.enabled = false;
+
+        BookUI.Instance?.SetHeldItem($"{art.artworkTitle} by {art.artistName}", "artwork");
+    }
+
+    void TryPlaceOrDropArtwork()
+    {
+        if (heldArtwork == null) return;
+
+        if (heldArtwork.IsNearOriginalPosition(transform.position))
+        {
+            // Hang back on wall
+            heldArtwork.RestoreToWall();
+            Collider col = heldArtwork.GetComponent<Collider>();
+            if (col != null) col.enabled = true;
+        }
+        else
+        {
+            // Drop on floor
+            heldArtwork.isHeld = false;
+            heldArtwork.transform.SetParent(null);
+            heldArtwork.transform.position = transform.position + transform.forward * 1f + Vector3.up * 0.5f;
+            heldArtwork.transform.localScale = heldArtwork.originalScale;
+            heldArtwork.transform.rotation = Quaternion.Euler(0, Random.Range(0f, 360f), 0);
+
+            Collider col = heldArtwork.GetComponent<Collider>();
+            if (col != null) col.enabled = true;
+        }
+
+        BookUI.Instance?.ClearHeldItem();
+        heldArtwork = null;
+    }
+
+    void TryOpenWiki()
+    {
+        if (heldArtwork == null) return;
+        if (!string.IsNullOrEmpty(heldArtwork.wikiUrl))
+        {
+            Application.OpenURL(heldArtwork.wikiUrl);
+        }
+        else
+        {
+            BookUI.Instance?.ShowMockMessage($"No wiki URL for:\n{heldArtwork.artworkTitle}", "");
+        }
+    }
+
+    // ===================== GETTERS =====================
 
     public BookItem GetHeldBook() => heldBook;
     public BookItem GetHoveredBook() => hoveredBook;
     public BookshelfSlot GetHoveredSlot() => hoveredSlot;
+    public Artwork GetHeldArtwork() => heldArtwork;
+    public Artwork GetHoveredArtwork() => hoveredArtwork;
 }

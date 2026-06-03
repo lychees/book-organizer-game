@@ -6,18 +6,19 @@ public class BookUI : MonoBehaviour
 
     [Header("UI Style")]
     public GUIStyle promptStyle;
-    public GUIStyle heldBookStyle;
+    public GUIStyle heldItemStyle;
     public GUIStyle progressStyle;
-    public GUIStyle pdfMockStyle;
+    public GUIStyle mockMessageStyle;
     public GUIStyle panelStyle;
 
     private PlayerController player;
     private string currentPrompt = "";
-    private string heldBookTitle = "";
+    private string heldItemTitle = "";
+    private string heldItemType = "";
     private string progressText = "Books placed: 0 / 0";
-    private string pdfMockMessage = "";
-    private float pdfMockTimer = 0f;
-    private bool showHeldBook = false;
+    private string mockMessage = "";
+    private float mockTimer = 0f;
+    private bool showHeldItem = false;
 
     void Awake()
     {
@@ -36,13 +37,12 @@ public class BookUI : MonoBehaviour
         promptStyle.fontSize = 22;
         promptStyle.normal.textColor = Color.white;
         promptStyle.alignment = TextAnchor.MiddleCenter;
-        promptStyle.fontStyle = FontStyle.Normal;
 
-        heldBookStyle = new GUIStyle();
-        heldBookStyle.fontSize = 20;
-        heldBookStyle.normal.textColor = Color.white;
-        heldBookStyle.alignment = TextAnchor.MiddleCenter;
-        heldBookStyle.fontStyle = FontStyle.Bold;
+        heldItemStyle = new GUIStyle();
+        heldItemStyle.fontSize = 18;
+        heldItemStyle.normal.textColor = Color.white;
+        heldItemStyle.alignment = TextAnchor.MiddleCenter;
+        heldItemStyle.wordWrap = true;
 
         progressStyle = new GUIStyle();
         progressStyle.fontSize = 26;
@@ -50,11 +50,11 @@ public class BookUI : MonoBehaviour
         progressStyle.alignment = TextAnchor.MiddleCenter;
         progressStyle.fontStyle = FontStyle.Bold;
 
-        pdfMockStyle = new GUIStyle();
-        pdfMockStyle.fontSize = 18;
-        pdfMockStyle.normal.textColor = Color.white;
-        pdfMockStyle.alignment = TextAnchor.MiddleCenter;
-        pdfMockStyle.wordWrap = true;
+        mockMessageStyle = new GUIStyle();
+        mockMessageStyle.fontSize = 18;
+        mockMessageStyle.normal.textColor = Color.white;
+        mockMessageStyle.alignment = TextAnchor.MiddleCenter;
+        mockMessageStyle.wordWrap = true;
 
         panelStyle = new GUIStyle();
         panelStyle.normal.background = MakeTex(2, 2, new Color(0, 0, 0, 0.75f));
@@ -75,12 +75,12 @@ public class BookUI : MonoBehaviour
         UpdatePrompt();
         UpdateProgress();
 
-        if (pdfMockTimer > 0)
+        if (mockTimer > 0)
         {
-            pdfMockTimer -= Time.deltaTime;
-            if (pdfMockTimer <= 0)
+            mockTimer -= Time.deltaTime;
+            if (mockTimer <= 0)
             {
-                pdfMockMessage = "";
+                mockMessage = "";
             }
         }
     }
@@ -96,15 +96,24 @@ public class BookUI : MonoBehaviour
                 currentPrompt += " (on shelf)";
             else
                 currentPrompt += " (drop)";
-            currentPrompt += "     [F] Read / Open PDF";
+            currentPrompt += "     [F] Open PDF";
+        }
+        else if (player.GetHeldArtwork() != null)
+        {
+            currentPrompt = "[E] Hang back / Drop artwork";
+            currentPrompt += "     [F] Open Wiki";
         }
         else if (player.GetHoveredBook() != null)
         {
             currentPrompt = "[E] Pick up book";
         }
+        else if (player.GetHoveredArtwork() != null)
+        {
+            currentPrompt = "[E] Inspect artwork";
+        }
         else
         {
-            currentPrompt = "WASD to move     Find books and place them on the shelf";
+            currentPrompt = "WASD = move | Space = jump | Find books and artworks to interact";
         }
     }
 
@@ -126,35 +135,36 @@ public class BookUI : MonoBehaviour
         // Prompt (bottom center)
         GUI.Label(new Rect(Screen.width / 2 - 400, Screen.height - 60, 800, 40), currentPrompt, promptStyle);
 
-        // Held book info (right side)
-        if (showHeldBook && !string.IsNullOrEmpty(heldBookTitle))
+        // Held item info (right side)
+        if (showHeldItem && !string.IsNullOrEmpty(heldItemTitle))
         {
-            Rect panelRect = new Rect(Screen.width - 370, Screen.height / 2 - 40, 350, 80);
+            Rect panelRect = new Rect(Screen.width - 380, Screen.height / 2 - 50, 360, 100);
             GUI.Box(panelRect, "", panelStyle);
-            GUI.Label(panelRect, $"Holding:\n{heldBookTitle}", heldBookStyle);
+            string label = heldItemType == "artwork" ? "Inspecting:" : "Holding:";
+            GUI.Label(panelRect, $"{label}\n{heldItemTitle}", heldItemStyle);
         }
 
-        // PDF Mock message (center)
-        if (!string.IsNullOrEmpty(pdfMockMessage))
+        // Mock message (center)
+        if (!string.IsNullOrEmpty(mockMessage))
         {
             Rect panelRect = new Rect(Screen.width / 2 - 300, Screen.height / 2 - 150, 600, 300);
             GUI.Box(panelRect, "", panelStyle);
-            GUI.Label(new Rect(panelRect.x + 20, panelRect.y + 20, panelRect.width - 40, panelRect.height - 40), pdfMockMessage, pdfMockStyle);
+            GUI.Label(new Rect(panelRect.x + 20, panelRect.y + 20, panelRect.width - 40, panelRect.height - 40), mockMessage, mockMessageStyle);
         }
     }
 
-    public void SetHeldBook(BookItem book)
+    public void SetHeldItem(string title, string type)
     {
-        if (book != null)
-        {
-            heldBookTitle = book.bookTitle;
-            showHeldBook = true;
-        }
-        else
-        {
-            heldBookTitle = "";
-            showHeldBook = false;
-        }
+        heldItemTitle = title;
+        heldItemType = type;
+        showHeldItem = true;
+    }
+
+    public void ClearHeldItem()
+    {
+        heldItemTitle = "";
+        heldItemType = "";
+        showHeldItem = false;
     }
 
     public void UpdateProgressManual()
@@ -162,9 +172,12 @@ public class BookUI : MonoBehaviour
         UpdateProgress();
     }
 
-    public void ShowPdfMockMessage(string bookTitle, string expectedPath)
+    public void ShowMockMessage(string title, string detail)
     {
-        pdfMockMessage = $"PDF not found for:\n<b>{bookTitle}</b>\n\nExpected path:\n{expectedPath}\n\nPlease place a real PDF file there to replace this mock.";
-        pdfMockTimer = 5f;
+        if (string.IsNullOrEmpty(detail))
+            mockMessage = title;
+        else
+            mockMessage = $"{title}\n\n{detail}";
+        mockTimer = 5f;
     }
 }
