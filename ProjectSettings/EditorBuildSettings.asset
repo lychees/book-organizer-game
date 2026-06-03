@@ -4,5 +4,8 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/BookOrganizer.unity
+    guid: 90ede0fafaf09db41a859c93bcb07f3b
   m_configObjects: {}

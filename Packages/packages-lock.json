@@ -26,7 +26,7 @@
       "hash": "8cb19eac84b4a489e26d61354f862e3340b7fff3"
     },
     "com.unity.inputsystem": {
-      "version": "1.14.2",
+      "version": "1.19.0",
       "depth": 0,
       "source": "registry",
       "dependencies": {
