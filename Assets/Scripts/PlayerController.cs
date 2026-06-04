@@ -130,7 +130,7 @@ public class PlayerController : MonoBehaviour
             }
 
             BookshelfSlot slot = hit.GetComponent<BookshelfSlot>();
-            if (slot != null && !slot.isOccupied)
+            if (slot != null)
             {
                 float d = Vector3.Distance(transform.position, slot.transform.position);
                 // Only consider slots in front of the player (dot > 0.5 ~= ~60° cone)
@@ -138,8 +138,13 @@ public class PlayerController : MonoBehaviour
                 dirToSlot.y = 0;
                 if (d < nearestSlotDist && Vector3.Dot(flatForward, dirToSlot) > 0.5f)
                 {
-                    nearestSlotDist = d;
-                    hoveredSlot = slot;
+                    // Holding a book → only detect empty slots
+                    // Empty hands → only detect occupied slots (to take book out)
+                    if ((heldBook != null && !slot.isOccupied) || (heldBook == null && slot.isOccupied))
+                    {
+                        nearestSlotDist = d;
+                        hoveredSlot = slot;
+                    }
                 }
             }
 
@@ -165,7 +170,7 @@ public class PlayerController : MonoBehaviour
             prevHoveredSlot = null;
         }
 
-        // Highlight current slot if holding a book and slot is available
+        // Highlight current slot if holding a book and slot is empty (green = can place)
         if (heldBook != null && hoveredSlot != null && !hoveredSlot.isOccupied)
         {
             hoveredSlot.SetHighlight(true);
@@ -184,6 +189,10 @@ public class PlayerController : MonoBehaviour
             else if (heldArtwork != null)
             {
                 TryPlaceOrDropArtwork();
+            }
+            else if (hoveredSlot != null && hoveredSlot.isOccupied)
+            {
+                PickupBookFromSlot(hoveredSlot);
             }
             else if (hoveredBook != null)
             {
@@ -212,6 +221,31 @@ public class PlayerController : MonoBehaviour
 
     void PickupBook(BookItem book)
     {
+        heldBook = book;
+        book.isHeld = true;
+        book.isPlaced = false;
+        book.transform.SetParent(holdPoint);
+        book.transform.localPosition = Vector3.zero;
+        book.transform.localRotation = Quaternion.identity;
+        book.transform.localScale = book.originalScale;
+
+        Rigidbody rb = book.GetComponent<Rigidbody>();
+        if (rb != null) rb.isKinematic = true;
+
+        Collider col = book.GetComponent<Collider>();
+        if (col != null) col.enabled = false;
+
+        BookUI.Instance?.SetHeldItem(book.bookTitle, "book");
+    }
+
+    void PickupBookFromSlot(BookshelfSlot slot)
+    {
+        if (slot == null || slot.placedBook == null) return;
+
+        BookItem book = slot.placedBook;
+        slot.placedBook = null;
+        slot.isOccupied = false;
+
         heldBook = book;
         book.isHeld = true;
         book.isPlaced = false;
