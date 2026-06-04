@@ -239,6 +239,9 @@ public class BookOrganizerSceneBuilder : MonoBehaviour
                 GameObject slotObj = new GameObject($"Slot_{r}_{c}");
                 slotObj.transform.SetParent(shelf.transform, false);
                 slotObj.transform.position = new Vector3(x, y + 0.25f, 0.1f);
+                BoxCollider slotCol = slotObj.AddComponent<BoxCollider>();
+                slotCol.isTrigger = true;
+                slotCol.size = new Vector3(0.35f, 0.45f, 0.08f);
                 BookshelfSlot slot = slotObj.AddComponent<BookshelfSlot>();
                 slot.bookOffset = Vector3.zero;
                 slot.bookRotation = new Vector3(0, 0, 0);
