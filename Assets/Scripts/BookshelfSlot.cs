@@ -5,7 +5,7 @@ public class BookshelfSlot : MonoBehaviour
     public bool isOccupied = false;
     public BookItem placedBook = null;
     public Vector3 bookOffset = Vector3.zero;
-    public Vector3 bookRotation = Vector3.zero;
+    public Vector3 bookRotation = new Vector3(0, 0, 0);
 
     [Header("Gizmo")]
     public Color gizmoColor = new Color(0, 1, 0, 0.3f);
@@ -15,5 +15,12 @@ public class BookshelfSlot : MonoBehaviour
     {
         Gizmos.color = gizmoColor;
         Gizmos.DrawWireCube(transform.position + bookOffset, gizmoSize);
+    }
+
+    public void SetHighlight(bool active)
+    {
+        Transform indicator = transform.Find("SlotIndicator");
+        if (indicator != null)
+            indicator.gameObject.SetActive(active);
     }
 }

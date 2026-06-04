@@ -34,22 +34,14 @@ public class BookOrganizerSceneBuilder : MonoBehaviour
         }
 
         // Build connecting corridors with walls
-        BuildCorridor(root.transform, new Vector3(0, 0, 10.5f), 6f, 5f);
-        BuildCorridor(root.transform, new Vector3(0, 0, -10.5f), 6f, 5f);
+        // Corridors: width=4 (matching door width), depth=3 (gap between rooms)
+        BuildCorridor(root.transform, new Vector3(0, 0, 10.5f), 4f, 3f);
+        BuildCorridor(root.transform, new Vector3(0, 0, -10.5f), 4f, 3f);
 
-        // Place bookshelves in rooms
-        // MainHall: 3 bookshelves
-        PlaceBookshelfInRoom(root.transform, rooms[0], new Vector3(-8, 0, -4));
-        PlaceBookshelfInRoom(root.transform, rooms[0], new Vector3(0, 0, -4));
-        PlaceBookshelfInRoom(root.transform, rooms[0], new Vector3(8, 0, -4));
-        // EastHall: 3 bookshelves
-        PlaceBookshelfInRoom(root.transform, rooms[1], new Vector3(-6, 0, 16));
-        PlaceBookshelfInRoom(root.transform, rooms[1], new Vector3(0, 0, 16));
-        PlaceBookshelfInRoom(root.transform, rooms[1], new Vector3(6, 0, 16));
-        // WestHall: 3 bookshelves
-        PlaceBookshelfInRoom(root.transform, rooms[2], new Vector3(-6, 0, -16));
-        PlaceBookshelfInRoom(root.transform, rooms[2], new Vector3(0, 0, -16));
-        PlaceBookshelfInRoom(root.transform, rooms[2], new Vector3(6, 0, -16));
+        // Place bookshelves in rooms - library style layout
+        PlaceLibraryBookshelves(root.transform, rooms[0]); // MainHall
+        PlaceLibraryBookshelves(root.transform, rooms[1]); // EastHall
+        PlaceLibraryBookshelves(root.transform, rooms[2]); // WestHall
 
         // Place artworks on walls
         var artworks = GetArtworkData();
@@ -118,10 +110,10 @@ public class BookOrganizerSceneBuilder : MonoBehaviour
         float hh = room.height * 0.5f;
         Color wallColor = new Color(0.93f, 0.91f, 0.89f);
 
-        // Floor
+        // Floor (Plane default size is 10x10, so scale = targetSize / 10)
         GameObject floor = CreatePrimitive($"{room.name}_Floor", PrimitiveType.Plane, parent,
             new Vector3(room.center.x, 0, room.center.z),
-            new Vector3(room.width, 1, room.depth),
+            new Vector3(room.width / 10f, 1, room.depth / 10f),
             new Color(0.86f, 0.84f, 0.82f));
         floor.GetComponent<Collider>().material = null;
 
@@ -158,9 +150,9 @@ public class BookOrganizerSceneBuilder : MonoBehaviour
 
     static void BuildCorridor(Transform parent, Vector3 center, float width, float depth)
     {
-        // Floor
+        // Floor (Plane default size is 10x10, so scale = targetSize / 10)
         GameObject floor = CreatePrimitive("Corridor_Floor", PrimitiveType.Plane, parent,
-            center, new Vector3(width, 1, depth), new Color(0.84f, 0.82f, 0.80f));
+            center, new Vector3(width / 10f, 1, depth / 10f), new Color(0.84f, 0.82f, 0.80f));
         floor.GetComponent<Collider>().material = null;
 
         // Side walls
@@ -190,16 +182,38 @@ public class BookOrganizerSceneBuilder : MonoBehaviour
         CreateBookshelf(parent, worldPos, $"Shelf_{room.name}_{localPos.x}");
     }
 
+    static void PlaceLibraryBookshelves(Transform parent, RoomDef room)
+    {
+        float hw = room.width * 0.5f;
+        float hd = room.depth * 0.5f;
+        float shelfWidth = 3f;
+        float doorHalf = 2.5f; // Leave a gap in the center aligned with the door
+
+        // Back wall row - split into left and right sections with a central aisle
+        float backZ = -hd + 0.5f;
+        // Left section
+        for (float x = -hw + shelfWidth * 0.5f; x < -doorHalf; x += shelfWidth)
+        {
+            PlaceBookshelfInRoom(parent, room, new Vector3(x, 0, backZ));
+        }
+        // Right section
+        for (float x = doorHalf + shelfWidth * 0.5f; x <= hw - shelfWidth * 0.5f + 0.001f; x += shelfWidth)
+        {
+            PlaceBookshelfInRoom(parent, room, new Vector3(x, 0, backZ));
+        }
+    }
+
     static GameObject CreateBookshelf(Transform parent, Vector3 position, string name)
     {
         GameObject shelf = new GameObject(name);
         shelf.transform.SetParent(parent, false);
-        shelf.transform.position = position;
+        // Lift slightly to prevent Z-fighting with floor
+        shelf.transform.position = position + new Vector3(0, 0.01f, 0);
 
         Color woodColor = new Color(0.48f, 0.28f, 0.16f);
 
         CreatePrimitive("BackPanel", PrimitiveType.Cube, shelf.transform,
-            new Vector3(0, 1.5f, -0.15f), new Vector3(3f, 3f, 0.05f), woodColor);
+            new Vector3(0, 1.5f, -0.2f), new Vector3(3f, 3f, 0.05f), woodColor);
         CreatePrimitive("LeftPanel", PrimitiveType.Cube, shelf.transform,
             new Vector3(-1.5f, 1.5f, 0.1f), new Vector3(0.1f, 3f, 0.4f), woodColor);
         CreatePrimitive("RightPanel", PrimitiveType.Cube, shelf.transform,
@@ -229,11 +243,27 @@ public class BookOrganizerSceneBuilder : MonoBehaviour
                 slot.bookOffset = Vector3.zero;
                 slot.bookRotation = new Vector3(0, 0, 0);
                 slot.gizmoColor = new Color(0, 1, 0, 0.3f);
+
+                // Green highlight indicator (hidden by default)
+                GameObject indicator = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                DestroyImmediate(indicator.GetComponent<Collider>());
+                indicator.name = "SlotIndicator";
+                indicator.transform.SetParent(slotObj.transform, false);
+                indicator.transform.localPosition = Vector3.zero;
+                indicator.transform.localScale = new Vector3(0.32f, 0.42f, 0.06f);
+                Renderer indR = indicator.GetComponent<Renderer>();
+                Material indMat = new Material(Shader.Find("Standard"));
+                indMat.color = new Color(0.2f, 1f, 0.2f, 0.6f);
+                indMat.SetFloat("_Mode", 3f);
+                indMat.EnableKeyword("_ALPHABLEND_ON");
+                indMat.renderQueue = 3000;
+                indR.material = indMat;
+                indicator.SetActive(false);
             }
         }
 
         CreatePrimitive("TopPanel", PrimitiveType.Cube, shelf.transform,
-            new Vector3(0, 3.05f, 0.1f), new Vector3(3.1f, 0.05f, 0.4f), woodColor);
+            new Vector3(0, 3.1f, 0.1f), new Vector3(3.1f, 0.05f, 0.4f), woodColor);
 
         return shelf;
     }
@@ -569,10 +599,13 @@ public class BookOrganizerSceneBuilder : MonoBehaviour
                 r.material = new Material(Shader.Find("Standard"));
 
             Rigidbody rb = bookObj.GetComponent<Rigidbody>();
-            if (rb != null) DestroyImmediate(rb);
+            if (rb == null) rb = bookObj.AddComponent<Rigidbody>();
+            rb.isKinematic = true;
+            rb.useGravity = true;
+            rb.mass = 0.5f;
 
             Collider col = bookObj.GetComponent<Collider>();
-            if (col != null) col.isTrigger = true;
+            if (col != null) col.isTrigger = false;
 
             BookItem book = bookObj.AddComponent<BookItem>();
             book.originalScale = new Vector3(0.3f, 0.4f, 0.05f);
@@ -616,7 +649,7 @@ public class BookOrganizerSceneBuilder : MonoBehaviour
         GameObject obj = GameObject.CreatePrimitive(type);
         obj.name = name;
         obj.transform.SetParent(parent, false);
-        obj.transform.position = pos;
+        obj.transform.localPosition = pos;
         obj.transform.localScale = scale;
         Renderer r = obj.GetComponent<Renderer>();
         if (r != null)

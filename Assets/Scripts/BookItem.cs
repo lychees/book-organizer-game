@@ -30,15 +30,7 @@ public class BookItem : MonoBehaviour
 
     void Update()
     {
-        if (!isHeld && !isPlaced)
-        {
-            // Gentle floating animation when on ground
-            float yOffset = Mathf.Sin(Time.time * floatSpeed) * floatHeight;
-            transform.position = new Vector3(startPos.x, startPos.y + yOffset, startPos.z);
-            transform.Rotate(Vector3.up, 20f * Time.deltaTime, Space.World);
-        }
-        
-        // Detect state transitions
+        // Detect state transitions FIRST (before animation overwrites position)
         if (isHeld && !wasHeld)
         {
             // Just picked up
@@ -51,6 +43,18 @@ public class BookItem : MonoBehaviour
         }
         
         wasHeld = isHeld;
+
+        // Only apply floating animation when physics is not active
+        Rigidbody rb = GetComponent<Rigidbody>();
+        bool physicsActive = (rb != null && !rb.isKinematic);
+
+        if (!isHeld && !isPlaced && !physicsActive)
+        {
+            // Gentle floating animation when on ground
+            float yOffset = Mathf.Sin(Time.time * floatSpeed) * floatHeight;
+            transform.position = new Vector3(startPos.x, startPos.y + yOffset, startPos.z);
+            transform.Rotate(Vector3.up, 20f * Time.deltaTime, Space.World);
+        }
     }
 
     public void SetColor(Color color)

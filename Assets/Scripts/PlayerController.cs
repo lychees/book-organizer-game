@@ -31,6 +31,7 @@ public class PlayerController : MonoBehaviour
     // Hovered items
     private BookItem hoveredBook = null;
     private BookshelfSlot hoveredSlot = null;
+    private BookshelfSlot prevHoveredSlot = null;
     private Artwork hoveredArtwork = null;
 
     void Start()
@@ -52,6 +53,7 @@ public class PlayerController : MonoBehaviour
         Move();
         DetectHoveredObjects();
         HandleInput();
+        UpdateSlotHighlights();
     }
 
     void Move()
@@ -140,6 +142,23 @@ public class PlayerController : MonoBehaviour
                     hoveredArtwork = art;
                 }
             }
+        }
+    }
+
+    void UpdateSlotHighlights()
+    {
+        // Clear previous highlight
+        if (prevHoveredSlot != null && prevHoveredSlot != hoveredSlot)
+        {
+            prevHoveredSlot.SetHighlight(false);
+            prevHoveredSlot = null;
+        }
+
+        // Highlight current slot if holding a book and slot is available
+        if (heldBook != null && hoveredSlot != null && !hoveredSlot.isOccupied)
+        {
+            hoveredSlot.SetHighlight(true);
+            prevHoveredSlot = hoveredSlot;
         }
     }
 
