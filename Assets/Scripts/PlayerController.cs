@@ -48,8 +48,7 @@ public class PlayerController : MonoBehaviour
             holdPoint = hp.transform;
         }
         // Ensure interaction settings are up-to-date (override scene serialized values)
-        interactionRadius = 5f;
-        raycastDistance = 8f;
+        interactionRadius = 3f;
     }
 
     void Update()
@@ -111,7 +110,11 @@ public class PlayerController : MonoBehaviour
         float nearestSlotDist = float.MaxValue;
         float nearestArtDist = float.MaxValue;
 
-        // 1) Sphere check for nearby objects
+        Vector3 flatForward = transform.forward;
+        flatForward.y = 0;
+        if (flatForward.sqrMagnitude > 0.001f) flatForward.Normalize();
+
+        // Sphere check for nearby objects (front-facing only for slots)
         Collider[] hits = Physics.OverlapSphere(transform.position, interactionRadius);
         foreach (var hit in hits)
         {
@@ -130,7 +133,10 @@ public class PlayerController : MonoBehaviour
             if (slot != null && !slot.isOccupied)
             {
                 float d = Vector3.Distance(transform.position, slot.transform.position);
-                if (d < nearestSlotDist)
+                // Only consider slots in front of the player (dot > 0.5 ~= ~60° cone)
+                Vector3 dirToSlot = (slot.transform.position - transform.position).normalized;
+                dirToSlot.y = 0;
+                if (d < nearestSlotDist && Vector3.Dot(flatForward, dirToSlot) > 0.5f)
                 {
                     nearestSlotDist = d;
                     hoveredSlot = slot;
@@ -147,39 +153,6 @@ public class PlayerController : MonoBehaviour
                     hoveredArtwork = art;
                 }
             }
-        }
-
-
-        // 2) SphereCast forward for shelf slots (covers height variations)
-        if (heldBook != null)
-        {
-            Vector3 castOrigin = transform.position + Vector3.up * 0.5f;
-            Vector3 castDir = transform.forward;
-            if (cameraTransform != null)
-            {
-                castDir = cameraTransform.forward;
-                castDir.y = 0;
-                if (castDir.sqrMagnitude > 0.001f)
-                    castDir.Normalize();
-                else
-                    castDir = transform.forward;
-            }
-            float castRadius = 1.2f;
-            RaycastHit[] castHits = Physics.SphereCastAll(castOrigin, castRadius, castDir, raycastDistance, ~0, QueryTriggerInteraction.Collide);
-            foreach (var rayHit in castHits)
-            {
-                BookshelfSlot slot = rayHit.collider.GetComponent<BookshelfSlot>();
-                if (slot != null && !slot.isOccupied)
-                {
-                    float d = Vector3.Distance(transform.position, slot.transform.position);
-                    if (d < nearestSlotDist)
-                    {
-                        nearestSlotDist = d;
-                        hoveredSlot = slot;
-                    }
-                }
-            }
-
         }
     }
 
